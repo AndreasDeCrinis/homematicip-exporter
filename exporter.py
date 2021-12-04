@@ -27,7 +27,7 @@ class Exporter(object):
         
         self.__home_client = None
         self.__metric_port = int(args.metric_port)
-        self.__collect_interval_seconds = 600
+        self.__collect_interval_seconds = args.collect_interval_seconds
         self.__log_level = int(args.log_level)
 
         logging.info(
