@@ -26,6 +26,8 @@ jobs:
       uses: docker/metadata-action@v3
       with:
         images: adcrinis/homematicip-exporter
+        tags: |
+          type=raw,value=${{ steps.date.outputs.date }}
 
     - name: Timestamp
       id: date
@@ -36,5 +38,5 @@ jobs:
         context: .
         push: true
         tags: ${{ steps.meta.outputs.tags }}
-        labels: latest,${{ steps.date.outputs.date }}
+        labels: ${{ steps.meta.outputs.labels }}
 
