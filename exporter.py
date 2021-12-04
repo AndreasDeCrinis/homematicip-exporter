@@ -27,8 +27,9 @@ class Exporter(object):
         
         self.__home_client = None
         self.__metric_port = int(args.metric_port)
-        self.__collect_interval_seconds = args.collect_interval_seconds
+        self.__collect_interval_seconds = int(args.collect_interval_seconds)
         self.__log_level = int(args.log_level)
+        self.__home_name = args.home_name
 
         logging.info(
             "using config file '{}' and exposing metrics on port '{}'".format(args.config_file, self.__metric_port)
@@ -73,7 +74,7 @@ class Exporter(object):
 
     def __init_metrics(self):
         namespace = 'homematicip'
-        labelnames = ['room', 'device_label']
+        labelnames = ['home_name','room', 'device_label']
         detail_labelnames = ['device_type', 'firmware_version', 'permanently_reachable']
         event_device_labelnames = ['device_label']
         event_group_labelnames = ['group_label']
@@ -82,7 +83,7 @@ class Exporter(object):
         self.version_info = prometheus_client.Gauge(
             name='version_info',
             documentation='HomematicIP info',
-            labelnames=['api_version'],
+            labelnames=['home_name', 'api_version'],
             namespace=namespace
         )
         self.metric_temperature_actual = prometheus_client.Gauge(
@@ -155,6 +156,7 @@ class Exporter(object):
     def __collect_homematicip_info(self):
         try:
             self.version_info.labels(
+                home_name=self.__home_name,
                 api_version=self.__home_client.currentAPVersion
             ).set(1)
             logging.debug(
@@ -167,13 +169,13 @@ class Exporter(object):
 
     def __collect_thermostat_metrics(self, room, device):
         if device.actualTemperature:
-            self.metric_temperature_actual.labels(room=room, device_label=device.label).set(device.actualTemperature)
+            self.metric_temperature_actual.labels(home_name=self.__home_name, room=room, device_label=device.label).set(device.actualTemperature)
 
         if device.setPointTemperature:
-            self.metric_temperature_setpoint.labels(room=room, device_label=device.label).set(device.setPointTemperature)
+            self.metric_temperature_setpoint.labels(home_name=self.__home_name, room=room, device_label=device.label).set(device.setPointTemperature)
 
         if device.humidity:
-            self.metric_humidity_actual.labels(room=room, device_label=device.label).set(device.humidity)
+            self.metric_humidity_actual.labels(home_name=self.__home_name, room=room, device_label=device.label).set(device.humidity)
         logging.info(
             "room: {}, label: {}, temperature_actual: {}, temperature_setpoint: {}, humidity_actual: {}"
             .format(room, device.label, device.actualTemperature, device.setPointTemperature, device.humidity)
@@ -182,27 +184,28 @@ class Exporter(object):
     def __collect_heating_metrics(self, room, device):
 
         # Do not check with if as 0 equals false
-        self.metric_temperature_actual.labels(room=room, device_label=device.label).set(device.valveActualTemperature)
-        self.metric_temperature_setpoint.labels(room=room, device_label=device.label).set(device.setPointTemperature)
-        self.metric_valve_adaption_needed.labels(room=room, device_label=device.label).set(device.automaticValveAdaptionNeeded)
-        self.metric_temperature_offset.labels(room=room, device_label=device.label).set(device.temperatureOffset)
-        self.metric_valve_position.labels(room=room, device_label=device.label).set(device.valvePosition)
+        self.metric_temperature_actual.labels(home_name=self.__home_name,room=room, device_label=device.label).set(device.valveActualTemperature)
+        self.metric_temperature_setpoint.labels(home_name=self.__home_name,room=room, device_label=device.label).set(device.setPointTemperature)
+        self.metric_valve_adaption_needed.labels(home_name=self.__home_name,room=room, device_label=device.label).set(device.automaticValveAdaptionNeeded)
+        self.metric_temperature_offset.labels(home_name=self.__home_name,room=room, device_label=device.label).set(device.temperatureOffset)
+        self.metric_valve_position.labels(home_name=self.__home_name,room=room, device_label=device.label).set(device.valvePosition)
 
         logging.info(
-            "room: {}, label: {}, temperature_actual: {}, temperature_setpoint: {}, valve_adaption_needed: {}, "
+            "home: {}, room: {}, label: {}, temperature_actual: {}, temperature_setpoint: {}, valve_adaption_needed: {}, "
             "temperature_offset {}, valve_position: {}"
-                .format(room, device.label, device.valveActualTemperature, device.setPointTemperature,
+                .format(self.__home_name, room, device.label, device.valveActualTemperature, device.setPointTemperature,
                         device.automaticValveAdaptionNeeded, device.temperatureOffset, device.valvePosition)
         )
 
     def __collect_device_info_metrics(self,room, device):
         logging.info(
-            "found device: room: {}, label: {}, device_type: {}, firmware_version: {}, last_status_update: {}, permanently_reachable: {}"
-                .format(room, device.label, device.deviceType.lower(), device.firmwareVersion, device.lastStatusUpdate,
+            "found device: home {}, room: {}, label: {}, device_type: {}, firmware_version: {}, last_status_update: {}, permanently_reachable: {}"
+                .format(self.__home_name, room, device.label, device.deviceType.lower(), device.firmwareVersion, device.lastStatusUpdate,
                         device.permanentlyReachable)
         )
         # general device info metric
         self.metric_device_info.labels(
+            home_name=self.__home_name,
             room=room,
             device_label=device.label,
             device_type=device.deviceType.lower(),
@@ -212,19 +215,21 @@ class Exporter(object):
         if device.lastStatusUpdate:
             # last status update metric
             self.metric_last_status_update.labels(
+                home_name=self.__home_name,
                 room=room,
                 device_label=device.label
             ).set(device.lastStatusUpdate.timestamp())
 
     def __collect_power_metrics(self, room, device):
         logging.info(
-            "found device: room: {}, label: {}, device_type: {}, firmware_version: {}, last_status_update: {}, permanently_reachable: {}"
-                .format(room, device.label, device.deviceType.lower(), device.firmwareVersion, device.lastStatusUpdate,
+            "found device: home: {}, room: {}, label: {}, device_type: {}, firmware_version: {}, last_status_update: {}, permanently_reachable: {}"
+                .format(self.__home_name, room, device.label, device.deviceType.lower(), device.firmwareVersion, device.lastStatusUpdate,
                         device.permanentlyReachable)
         )
         # general device info metric
         logging.info(device.currentPowerConsumption)
         self.metric_power_consumption.labels(
+            home_name=self.__home_name,
             room=room,
             device_label=device.label
         ).set(device.currentPowerConsumption)
@@ -240,6 +245,7 @@ class Exporter(object):
                     _window_state = str(data.windowState).lower()
                     _sabotage = str(data.sabotage).lower()
                     self.metric_device_event.labels(
+                        home_name=self.__home_name,
                         device_label=data.label,
                         type=str(type).lower(),
                         window_state=_window_state,
@@ -310,6 +316,9 @@ if __name__ == '__main__':
     parser.add_argument('--log-level',
                         default=30,
                         help='log level')
+    parser.add_argument('--home-name',
+                        default="home",
+                        help='name of the home. e.g. Landsitz')
 
     # Start up the server to expose the metrics.
     e = Exporter(parser.parse_args())
