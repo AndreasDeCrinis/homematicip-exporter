@@ -2,6 +2,8 @@ import argparse
 import sys
 import time
 import logging
+import time
+import sys, os
 import homematicip
 import prometheus_client
 from homematicip.home import Home, EventType
@@ -254,6 +256,8 @@ class Exporter(object):
         """
         try:
             self.__home_client.get_current_state()
+            if not self.__home_client.groups:
+                return
             for g in self.__home_client.groups:
                 if g.groupType == "META":
                     for d in g.devices:
@@ -271,9 +275,10 @@ class Exporter(object):
                             self.__collect_power_metrics(g.label, d)
 
         except Exception as e:
-            logging.warning(
-                "collecting status from device(s) failed with: {1}".format(str(e))
-            )
+            exc_type, exc_obj, exc_tb = sys.exc_info()
+            fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+            print(exc_type, fname, exc_tb.tb_lineno)
+            logging.info("collecting status from device(s) failed with:")
         finally:
             logging.info('waiting {}s before next collection cycle'.format(self.__collect_interval_seconds))
             time.sleep(self.__collect_interval_seconds)
@@ -311,3 +316,5 @@ if __name__ == '__main__':
     # Generate some requests.
     while True:
         e.collect()
+        # sleep for 30 seconds to avoid throttling
+        # time.sleep(5)
